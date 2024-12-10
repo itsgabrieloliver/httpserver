@@ -5,7 +5,9 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let listener = TcpListener::bind("0.0.0.0:7878").unwrap();
+
+    println!("Listening..");
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -17,25 +19,27 @@ fn main() {
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&stream);
 
-    let request_line = buf_reader.lines().next().unwrap().unwrap();
+    let request_line = match buf_reader.lines().next() {
+        Some(Ok(line)) => line,
+        Some(Err(e)) => {
+            eprintln!("Failed to read line from stream: {e}");
+            return;
+        }
+        None => return,
+    };
 
-    if request_line == "GET / HTTP/1.1" {
-        let status_line = "HTTP/1.1 200 OK";
-        let contents = fs::read_to_string("index.html").unwrap();
-        let length = contents.len();
+    println!("{request_line}");
 
-        let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
-
-        stream.write_all(response.as_bytes()).unwrap();
-        stream.flush().unwrap();
+    let (status_line, filename) = if request_line == "GET / HTTP/1.1" {
+        ("HTTP/1.1 200 OK", "html/index.html")
     } else {
-        let status_line = "HTTP/1.1 404 NOT FOUND";
-        let contents = fs::read_to_string("404.html").unwrap();
-        let length = contents.len();
+        ("HTTP/1.1 404 NOT FOUND", "html/404.html")
+    };
 
-        let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+    let contents = fs::read_to_string(filename).unwrap();
+    let length = contents.len();
 
-        stream.write_all(response.as_bytes()).unwrap();
-        stream.flush().unwrap();
-    }
+    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+
+    stream.write_all(response.as_bytes()).unwrap();
 }
