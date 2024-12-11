@@ -4,15 +4,24 @@ use std::io::BufReader;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
+use httpserver::ThreadPool;
+
 fn main() {
     let listener = TcpListener::bind("0.0.0.0:7878").unwrap();
 
+    let pool = ThreadPool::new(4);
+
     println!("Listening..");
 
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-
-        handle_connection(stream);
+    for stream_result in listener.incoming() {
+        match stream_result {
+            Ok(stream) => {
+                pool.execute(|| handle_connection(stream));
+            }
+            Err(error) => {
+                eprintln!("[ERROR] Failed to get TCP stream. {error}");
+            }
+        }
     }
 }
 
